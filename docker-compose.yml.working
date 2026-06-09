@@ -1,0 +1,129 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: comfy-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: comfy
+      RABBITMQ_DEFAULT_PASS: ChangeThisPassword
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  comfy-master:
+    image: mmartial/comfyui-nvidia-docker:latest
+    container_name: comfy-master
+    restart: unless-stopped
+    environment:
+      COMFY_ROLE: master
+      RABBITMQ_URL: amqp://comfy:ChangeThisPassword@rabbitmq:5672/
+      COMFY_WORKERS: http://comfy-worker-3080:8188,http://comfy-worker-2070:8188
+      NVIDIA_VISIBLE_DEVICES: "0"
+    volumes:
+      - ./comfyui-master:/comfyui
+      - ./custom_nodes_master:/comfyui/custom_nodes
+      - ./shared/input:/comfyui/input
+      - ./shared/output/master:/comfyui/output
+      - ./mnt:/comfy/mnt
+      - ./mnt/ComfyUI/models:/comfyui/models
+      - ./shared/output/master:/comfy/mnt/ComfyUI/output
+      - ./shared/input:/comfy/mnt/ComfyUI/input
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+    depends_on:
+      - rabbitmq
+
+  comfy-worker-3080:
+    image: mmartial/comfyui-nvidia-docker:latest
+    container_name: comfy-worker-3080
+    restart: unless-stopped
+    ports:
+      - "8188:8188"
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "0"
+      CUDA_VISIBLE_DEVICES: "0"
+    volumes:
+      - ./comfyui-3080:/comfyui
+      - ./custom_nodes_worker:/comfyui/custom_nodes
+      - ./mnt:/comfy/mnt
+      - ./mnt/ComfyUI/models:/comfyui/models
+      - /mnt/comfy-output/input:/comfyui/input
+      - /mnt/comfy-output/output/3080:/comfyui/output
+      - /mnt/comfy-output/input:/comfy/mnt/ComfyUI/input
+      - /mnt/comfy-output/output/3080:/comfy/mnt/ComfyUI/output
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+
+  comfy-worker-2070:
+    image: mmartial/comfyui-nvidia-docker:latest
+    container_name: comfy-worker-2070
+    restart: unless-stopped
+    ports:
+      - "8189:8188"
+    environment:
+      NVIDIA_VISIBLE_DEVICES: "1"
+      CUDA_VISIBLE_DEVICES: "0"
+    volumes:
+      - ./comfyui-2070:/comfyui
+      - ./custom_nodes_worker:/comfyui/custom_nodes
+      - ./mnt:/comfy/mnt
+      - ./mnt/ComfyUI/models:/comfyui/models
+      - /mnt/comfy-output/input:/comfyui/input
+      - /mnt/comfy-output/output/2070:/comfyui/output
+      - /mnt/comfy-output/input:/comfy/mnt/ComfyUI/input
+      - /mnt/comfy-output/output/2070:/comfy/mnt/ComfyUI/output
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["1"]
+              capabilities: [gpu]
+
+  comfy-api:
+    build: ./comfy-api
+    container_name: comfy-api
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    environment:
+      RABBITMQ_URL: amqp://comfy:ChangeThisPassword@rabbitmq:5672/
+      QUEUE_NAME: comfy_jobs
+    depends_on:
+      - rabbitmq
+
+  comfy-dispatcher:
+    build: ./comfy-dispatcher
+    container_name: comfy-dispatcher
+    restart: unless-stopped
+    environment:
+      RABBITMQ_URL: amqp://comfy:ChangeThisPassword@rabbitmq:5672/
+      QUEUE_NAME: comfy_jobs
+      COMFY_WORKERS: http://comfy-worker-3080:8188,http://comfy-worker-2070:8188
+      COMFY_API_URL: http://comfy-api:9000
+    depends_on:
+      - rabbitmq
+      - comfy-worker-3080
+      - comfy-worker-2070
+
+  comfy-gui-proxy:
+    image: nginx:alpine
+    container_name: comfy-gui-proxy
+    restart: unless-stopped
+    ports:
+      - "8187:80"
+    volumes:
+      - ./nginx-comfy-master.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - comfy-master
+      - comfy-api

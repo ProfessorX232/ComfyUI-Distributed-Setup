@@ -1,0 +1,15 @@
+mnt/
+models/
+shared/
+output/
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.mp4
+*.png
+*.jpg
+*.jpeg
+*.env
+*.log
+__pycache__/
