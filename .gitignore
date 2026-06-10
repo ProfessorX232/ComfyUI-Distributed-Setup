@@ -1,15 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+
+# Models
 mnt/
 models/
-shared/
-output/
 *.safetensors
 *.ckpt
 *.pt
 *.pth
+
+# Outputs
+shared/
+output/
 *.mp4
 *.png
 *.jpg
 *.jpeg
-*.env
+
+# Secrets
+.env
 *.log
-__pycache__/
+
+# VSCode
+.vscode/
+
+# Linux
+.DS_Store
